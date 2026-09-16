@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=overlays-content" />
   <meta name="theme-color" content="#070b2e" />
   <title>NEW SUPER MARIO // ULTRA ARCADE</title>
   <style>
@@ -122,13 +122,14 @@
     .controls-copy { display: flex; align-items: center; gap: 8px; }
     .controls-copy .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 11px var(--green); }
     .mobile-controls { display: none; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 390px; margin: 18px auto 0; }
-    .control-button { min-height: 58px; border: 1px solid rgba(131, 157, 255, .26); border-radius: 17px; color: #f6f6ff; background: rgba(24, 31, 87, .86); box-shadow: 0 6px 0 rgba(7,10,36,.7); font-size: 22px; font-weight: 1000; touch-action: none; }
+    .control-button { min-height: 58px; border: 1px solid rgba(131, 157, 255, .26); border-radius: 17px; color: #f6f6ff; background: rgba(24, 31, 87, .86); box-shadow: 0 6px 0 rgba(7,10,36,.7); font-size: 22px; font-weight: 1000; touch-action: none; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; cursor: pointer; transition: transform .08s ease, box-shadow .08s ease, filter .08s ease; }
     .control-button.jump { color: #1a143d; background: linear-gradient(130deg, var(--gold), #ff9857); }
-    .control-button:active { transform: translateY(4px); box-shadow: 0 2px 0 rgba(7,10,36,.7); }
+    .control-button:active, .control-button.is-pressed { transform: translateY(4px) scale(.98); box-shadow: 0 2px 0 rgba(7,10,36,.7); filter: brightness(1.16); }
     .footer { margin: 20px 0 0; text-align: center; color: #7e87b5; font-size: 11px; letter-spacing: .12em; }
 
-    @media (max-width: 760px) {
-      .shell { width: min(100% - 16px, 650px); padding-top: 14px; }
+    @media (max-width: 760px), (pointer: coarse) {
+      body { padding-bottom: env(safe-area-inset-bottom); }
+      .shell { width: min(100% - 16px, 650px); padding-top: 14px; padding-bottom: 100px; }
       .topline { align-items: flex-start; }
       .hud { grid-template-columns: repeat(4, 1fr); gap: 6px; }
       .stat-card { min-height: 64px; padding: 9px 8px; border-radius: 14px; }
@@ -147,10 +148,25 @@
       .win-art { height: 180px; order: -1; }
       .overlay p { font-size: 12px; margin-bottom: 14px; }
       .key-hints { font-size: 10px; }
-      .mobile-controls { display: grid; }
+      .mobile-controls { position: fixed; left: 50%; bottom: max(12px, env(safe-area-inset-bottom)); z-index: 20; display: grid; width: min(calc(100% - 24px), 390px); max-width: none; margin: 0; padding: 8px; border: 1px solid rgba(131,157,255,.28); border-radius: 23px; background: rgba(8, 12, 43, .82); box-shadow: 0 15px 38px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.1); backdrop-filter: blur(14px); transform: translateX(-50%); }
+      .control-button { min-height: 62px; }
       .controls-row { justify-content: center; text-align: center; }
       .controls-row .desktop-hint { display: none; }
       .footer { font-size: 9px; }
+    }
+
+    @media (max-height: 540px) and (orientation: landscape) {
+      .shell { padding-top: 8px; padding-bottom: 88px; }
+      .topline { margin-bottom: 7px; }
+      .brand-mark { width: 38px; height: 38px; font-size: 20px; }
+      .brand-subtitle, .controls-row, .footer { display: none; }
+      .hud { margin-bottom: 7px; }
+      .stat-card { min-height: 52px; padding: 6px 8px; }
+      .stat-label { font-size: 7px; }
+      .stat-value { font-size: 16px; }
+      .game-frame { padding: 4px; }
+      .mobile-controls { bottom: max(7px, env(safe-area-inset-bottom)); padding: 5px; }
+      .control-button { min-height: 48px; }
     }
   </style>
 </head>
@@ -480,8 +496,18 @@
       window.addEventListener('keydown', (e) => { setKey(e.code, true); if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'Space'].includes(e.code)) e.preventDefault(); });
       window.addEventListener('keyup', (e) => setKey(e.code, false));
       window.addEventListener('blur', () => { input.left = false; input.right = false; });
-      function bindHold(id, key) { const el = $(id); const down = (e) => { e.preventDefault(); ensureAudio(); input[key] = true; }; const up = (e) => { e.preventDefault(); input[key] = false; }; ['pointerdown', 'touchstart'].forEach(ev => el.addEventListener(ev, down, { passive: false })); ['pointerup', 'pointercancel', 'pointerleave', 'touchend'].forEach(ev => el.addEventListener(ev, up, { passive: false })); }
-      bindHold('btn-left', 'left'); bindHold('btn-right', 'right'); $('btn-jump').addEventListener('pointerdown', (e) => { e.preventDefault(); ensureAudio(); jump(); }); $('start-btn').addEventListener('click', startGame); $('sound-btn').addEventListener('click', toggleSound); $('reset-btn').addEventListener('click', hardReset);
+      function bindHold(id, key) {
+        const el = $(id);
+        const release = (e) => { if (e) e.preventDefault(); input[key] = false; el.classList.remove('is-pressed'); if (e?.pointerId !== undefined && el.hasPointerCapture?.(e.pointerId)) el.releasePointerCapture(e.pointerId); };
+        const press = (e) => { e.preventDefault(); ensureAudio(); input[key] = true; el.classList.add('is-pressed'); if (e.pointerId !== undefined) el.setPointerCapture?.(e.pointerId); };
+        el.addEventListener('pointerdown', press, { passive: false });
+        ['pointerup', 'pointercancel', 'lostpointercapture', 'pointerleave'].forEach((eventName) => el.addEventListener(eventName, release, { passive: false }));
+      }
+      bindHold('btn-left', 'left'); bindHold('btn-right', 'right');
+      const jumpButton = $('btn-jump');
+      jumpButton.addEventListener('pointerdown', (e) => { e.preventDefault(); ensureAudio(); jumpButton.classList.add('is-pressed'); jump(); jumpButton.setPointerCapture?.(e.pointerId); }, { passive: false });
+      ['pointerup', 'pointercancel', 'lostpointercapture', 'pointerleave'].forEach((eventName) => jumpButton.addEventListener(eventName, (e) => { e.preventDefault(); jumpButton.classList.remove('is-pressed'); }, { passive: false }));
+      $('start-btn').addEventListener('click', startGame); $('sound-btn').addEventListener('click', toggleSound); $('reset-btn').addEventListener('click', hardReset);
       resetWorld(); updateHUD(); if (state.demo) setTimeout(startGame, 500); raf = requestAnimationFrame(loop);
     })();
   </script>
