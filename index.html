@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة سوبر ماريو - الإصدار الأسطوري</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%);
+            color: #fff;
+            overflow-x: hidden;
+            touch-action: none;
+            user-select: none;
+        }
+        canvas {
+            box-shadow: 0 25px 60px rgba(0,0,0,0.8), 0 0 40px rgba(239, 68, 68, 0.4);
+            border-radius: 16px;
+            background: linear-gradient(to bottom, #38bdf8 0%, #7dd3fc 70%, #bae6fd 100%);
+        }
+        .retro-shadow {
+            text-shadow: 3px 3px 0px #b91c1c, 6px 6px 0px #1d4ed8;
+        }
+        .btn-game {
+            transition: all 0.15s ease;
+            box-shadow: 0 6px 0 #991b1b;
+        }
+        .btn-game:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 #991b1b;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-between p-4">
+
+    <header class="text-center my-2">
+        <h1 class="text-4xl md:text-6xl font-black text-amber-400 retro-shadow mb-1 tracking-wider">SUPER MARIO ULTRA</h1>
+        <p class="text-sm md:text-base text-cyan-300 font-semibold">اقفز، اجمع العملات، وتجنب الأعداء للوصول إلى القلعة النهائية!</p>
+    </header>
+
+    <div class="w-full max-w-3xl bg-slate-900/90 backdrop-blur border border-slate-700 rounded-2xl p-3 mb-2 flex flex-wrap justify-around items-center gap-3 shadow-xl">
+        <div class="flex items-center gap-2 bg-slate-800 px-4 py-2 rounded-xl border border-slate-700">
+            <span class="text-red-400 font-bold">❤️ الأرواح:</span>
+            <span id="lives-display" class="text-xl font-black text-white">3</span>
+        </div>
+        <div class="flex items-center gap-2 bg-slate-800 px-4 py-2 rounded-xl border border-slate-700">
+            <span class="text-amber-400 font-bold">🪙 العملات:</span>
+            <span id="coins-display" class="text-xl font-black text-white">0</span>
+        </div>
+        <div class="flex items-center gap-2 bg-slate-800 px-4 py-2 rounded-xl border border-slate-700">
+            <span class="text-emerald-400 font-bold">🏆 النقاط:</span>
+            <span id="score-display" class="text-xl font-black text-white">0</span>
+        </div>
+        <div class="flex items-center gap-2 bg-slate-800 px-4 py-2 rounded-xl border border-slate-700">
+            <span class="text-cyan-400 font-bold">🚩 المستوى:</span>
+            <span id="level-display" class="text-xl font-black text-white">1</span>
+        </div>
+    </div>
+
+    <main class="relative flex flex-col items-center justify-center">
+        <canvas id="gameCanvas" width="800" height="450" class="max-w-full h-auto"></canvas>
+
+        <!-- Overlays (Start / Game Over / Victory) -->
+        <div id="overlay" class="absolute inset-0 bg-slate-950/90 backdrop-blur-md rounded-2xl flex flex-col items-center justify-center text-center p-6 z-20">
+            <h2 id="overlay-title" class="text-4xl md:text-6xl font-black text-amber-400 mb-4 retro-shadow">استعد للمغامرة الكبرى!</h2>
+            <p id="overlay-desc" class="text-gray-300 max-w-lg mb-6 text-sm md:text-base leading-relaxed">
+                استخدم أسهم لوحة المفاتيح <strong>(اليمين/اليسار)</strong> للحركة، ومفتاح <strong>المسافة (Space)</strong> أو السهم العلوي للقفز. اسحق الأعداء من الأعلى لتدميرهم!
+            </p>
+            <button id="start-btn" class="btn-game bg-red-600 hover:bg-red-500 text-white font-black text-xl px-10 py-4 rounded-xl border-b-4 border-red-800 shadow-2xl">
+                ابدأ المغامرة الآن
+            </button>
+        </div>
+    </main>
+
+    <div class="w-full max-w-md mt-4 flex justify-between items-center px-4 md:hidden">
+        <div class="flex gap-2">
+            <button id="btn-left" class="bg-slate-800 active:bg-slate-700 w-16 h-16 rounded-2xl text-2xl font-bold border border-slate-600 flex items-center justify-center shadow-lg">⬅️</button>
+            <button id="btn-right" class="bg-slate-800 active:bg-slate-700 w-16 h-16 rounded-2xl text-2xl font-bold border border-slate-600 flex items-center justify-center shadow-lg">➡️</button>
+        </div>
+        <button id="btn-jump" class="bg-red-600 active:bg-red-500 w-24 h-16 rounded-2xl text-lg font-black border-b-4 border-red-800 flex items-center justify-center shadow-xl">🚀 قفز</button>
+    </div>
+
+    <footer class="mt-4 text-xs text-gray-400">
+        سوبر ماريو ألترا - صُممت خصيصاً لتجربة ترفيهية مذهلة وسلسة.
+    </footer>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game states: START, PLAYING, GAMEOVER, VICTORY
+        let gameState = 'START';
+        let score = 0;
+        let coins = 0;
+        let lives = 3;
+        let level = 1;
+        let cameraX = 0;
+
+        // Player object
+        let player = {
+            x: 100,
+            y: 200,
+            width: 32,
+            height: 44,
+            vx: 0,
+            vy: 0,
+            speed: 4,
+            jumpForce: -11.5,
+            isGrounded: false,
+            facingRight: true
+        };
+
+        const gravity = 0.5;
+
+        // World maps structures (Platforms, Coins, Enemies, Flagpole)
+        let platforms = [];
+        let itemBoxes = [];
+        let collectibleCoins = [];
+        let enemies = [];
+        let particles = [];
+        let flagpole = { x: 0, reached: false };
+
+        // Input controls
+        const keys = {};
+        window.addEventListener('keydown', e => {
+            keys[e.code] = true;
+            if ((e.code === 'Space' || e.code === 'ArrowUp') && gameState === 'PLAYING') {
+                if (player.isGrounded) {
+                    player.vy = player.jumpForce;
+                    player.isGrounded = false;
+                    createParticles(player.x + player.width/2, player.y + player.height, '#ffffff', 8);
+                }
+                e.preventDefault();
+            }
+        });
+        window.addEventListener('keyup', e => {
+            keys[e.code] = false;
+        });
+
+        // Mobile touch handlers
+        document.getElementById('btn-left').addEventListener('touchstart', () => { keys['ArrowLeft'] = true; });
+        document.getElementById('btn-left').addEventListener('touchend', () => { keys['ArrowLeft'] = false; });
+        document.getElementById('btn-right').addEventListener('touchstart', () => { keys['ArrowRight'] = true; });
+        document.getElementById('btn-right').addEventListener('touchend', () => { keys['ArrowRight'] = false; });
+        document.getElementById('btn-jump').addEventListener('touchstart', () => {
+            if (gameState === 'PLAYING' && player.isGrounded) {
+                player.vy = player.jumpForce;
+                player.isGrounded = false;
+            }
+        });
+
+        function initLevel() {
+            cameraX = 0;
+            player.x = 100;
+            player.y = 200;
+            player.vx = 0;
+            player.vy = 0;
+            player.isGrounded = false;
+
+            platforms = [];
+            itemBoxes = [];
+            collectibleCoins = [];
+            enemies = [];
+            particles = [];
+
+            // Ground floors (sections with pits)
+            platforms.push({ x: 0, y: 380, width: 900, height: 70, type: 'ground' });
+            platforms.push({ x: 1000, y: 380, width: 800, height: 70, type: 'ground' });
+            platforms.push({ x: 1900, y: 380, width: 1200, height: 70, type: 'ground' });
+
+            // Floating platforms & Bricks
+            platforms.push({ x: 350, y: 260, width: 140, height: 24, type: 'brick' });
+            platforms.push({ x: 550, y: 180, width: 180, height: 24, type: 'brick' });
+            platforms.push({ x: 1150, y: 250, width: 200, height: 24, type: 'brick' });
+            platforms.push({ x: 1450, y: 170, width: 160, height: 24, type: 'brick' });
+
+            // Mystery Item Boxes (contains coins)
+            itemBoxes.push({ x: 400, y: 260, width: 30, height: 30, active: true });
+            itemBoxes.push({ x: 600, y: 180, width: 30, height: 30, active: true });
+            itemBoxes.push({ x: 1250, y: 250, width: 30, height: 30, active: true });
+
+            // Coins scattered around
+            for (let i = 0; i < 15; i++) {
+                collectibleCoins.push({
+                    x: 300 + i * 140,
+                    y: i % 2 === 0 ? 320 : 130,
+                    size: 16,
+                    collected: false
+                });
+            }
+
+            // Enemies (Goombas patrolling)
+            enemies.push({ x: 500, y: 346, width: 32, height: 34, vx: -1.5, patrolling: true, alive: true, minX: 450, maxX: 700 });
+            enemies.push({ x: 1200, y: 346, width: 32, height: 34, vx: -1.8, patrolling: true, alive: true, minX: 1050, maxX: 1350 });
+            enemies.push({ x: 1600, y: 346, width: 32, height: 34, vx: -2.0, patrolling: true, alive: true, minX: 1500, maxX: 1800 });
+
+            // Flagpole at the end of the level
+            flagpole = { x: 2800, y: 120, width: 12, height: 260, reached: false };
+        }
+
+        function update() {
+            if (gameState !== 'PLAYING') return;
+
+            // Player horizontal movement
+            player.vx = 0;
+            if (keys['ArrowLeft'] || keys['KeyA']) {
+                player.vx = -player.speed;
+                player.facingRight = false;
+            }
+            if (keys['ArrowRight'] || keys['KeyD']) {
+                player.vx = player.speed;
+                player.facingRight = true;
+            }
+
+            player.x += player.vx;
+            // Map boundary left limit
+            if (player.x < 0) player.x = 0;
+
+            // Apply gravity
+            player.vy += gravity;
+            player.y += player.vy;
+            player.isGrounded = false;
+
+            // Collision with platforms and ground
+            platforms.forEach(plat => {
+                // Check landing on top
+                if (
+                    player.x + player.width > plat.x &&
+                    player.x < plat.x + plat.width &&
+                    player.y + player.height >= plat.y &&
+                    player.y + player.height - player.vy <= plat.y + 12 &&
+                    player.vy >= 0
+                ) {
+                    player.y = plat.y - player.height;
+                    player.vy = 0;
+                    player.isGrounded = true;
+                }
+            });
+
+            // Collision with item boxes
+            itemBoxes.forEach(box => {
+                if (
+                    player.x + player.width > box.x &&
+                    player.x < box.x + box.width &&
+                    player.y <= box.y + box.height &&
+                    player.y - player.vy >= box.y + box.height - 10 &&
+                    player.vy < 0
+                ) {
+                    player.vy = 0;
+                    player.y = box.y + box.height;
+                    if (box.active) {
+                        box.active = false;
+                        coins++;
+                        score += 100;
+                        createParticles(box.x + 15, box.y, '#fbbf24', 12);
+                    }
+                }
+            });
+
+            // Fall into pit (Game Over)
+            if (player.y > canvas.height + 60) {
+                playerHit();
+                return;
+            }
+
+            // Collectible Coins detection
+            collectibleCoins.forEach(coin => {
+                if (!coin.collected) {
+                    let dist = Math.hypot((player.x + player.width/2) - coin.x, (player.y + player.height/2) - coin.y);
+                    if (dist < 26) {
+                        coin.collected = true;
+                        coins++;
+                        score += 200;
+                        createParticles(coin.x, coin.y, '#f59e0b', 10);
+                    }
+                }
+            });
+
+            // Update enemies
+            enemies.forEach(enemy => {
+                if (!enemy.alive) return;
+
+                enemy.x += enemy.vx;
+                if (enemy.x <= enemy.minX || enemy.x >= enemy.maxX) {
+                    enemy.vx *= -1;
+                }
+
+                // Collision with player
+                if (
+                    player.x + player.width > enemy.x + 4 &&
+                    player.x < enemy.x + enemy.width - 4 &&
+                    player.y + player.height > enemy.y + 4 &&
+                    player.y < enemy.y + enemy.height
+                ) {
+                    // Check if jumping on enemy
+                    if (player.vy > 0 && player.y + player.height - player.vy <= enemy.y + 14) {
+                        enemy.alive = false;
+                        player.vy = -8; // Bounce off enemy
+                        score += 500;
+                        createParticles(enemy.x + 16, enemy.y + 16, '#ef4444', 20);
+                    } else {
+                        playerHit();
+                    }
+                }
+            });
+
+            // Check flagpole win condition
+            if (!flagpole.reached && player.x + player.width >= flagpole.x && player.y + player.height >= flagpole.y) {
+                flagpole.reached = true;
+                score += 2000;
+                gameState = 'VICTORY';
+                showOverlay('أنت بطل الأساطير!', `لقد أتممت المستوى بنجاح! مجموع النقاط: ${score}`, 'المستوى التالي');
+            }
+
+            // Update camera to follow Mario smoothly
+            cameraX = player.x - 250;
+            if (cameraX < 0) cameraX = 0;
+
+            // Update particles
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life--;
+            });
+            particles = particles.filter(p => p.life > 0);
+
+            updateHUD();
+        }
+
+        function playerHit() {
+            lives--;
+            createParticles(player.x + 16, player.y + 22, '#ef4444', 30);
+            if (lives <= 0) {
+                gameState = 'GAMEOVER';
+                showOverlay('انتهت اللعبة!', `لقد نفذت أرواحك. النقاط الإجمالية: ${score}`, 'إعادة المحاولة');
+            } else {
+                player.x = 100;
+                player.y = 200;
+                player.vx = 0;
+                player.vy = 0;
+            }
+        }
+
+        function createParticles(x, y, color, count) {
+            for (let i = 0; i < count; i++) {
+                let angle = Math.random() * Math.PI * 2;
+                let speed = 1 + Math.random() * 4;
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    color: color,
+                    life: 25 + Math.random() * 15,
+                    size: 3 + Math.random() * 4
+                });
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(-cameraX, 0);
+
+            // Draw Background Scenery (Clouds & Hills)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.beginPath();
+            ctx.arc(300 + cameraX * 0.2, 100, 40, 0, Math.PI * 2);
+            ctx.arc(340 + cameraX * 0.2, 110, 50, 0, Math.PI * 2);
+            ctx.arc(380 + cameraX * 0.2, 100, 40, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(1100 + cameraX * 0.2, 80, 45, 0, Math.PI * 2);
+            ctx.arc(1150 + cameraX * 0.2, 90, 55, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw Platforms & Ground
+            platforms.forEach(plat => {
+                if (plat.type === 'ground') {
+                    ctx.fillStyle = '#15803d'; // Grass top
+                    ctx.fillRect(plat.x, plat.y, plat.width, 16);
+                    ctx.fillStyle = '#b45309'; // Soil body
+                    ctx.fillRect(plat.x, plat.y + 16, plat.width, plat.height - 16);
+                } else {
+                    ctx.fillStyle = '#d97706'; // Brick texture
+                    ctx.fillRect(plat.x, plat.y, plat.width, plat.height);
+                    ctx.strokeStyle = '#78350f';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(plat.x, plat.y, plat.width, plat.height);
+                }
+            });
+
+            // Draw Item Boxes
+            itemBoxes.forEach(box => {
+                ctx.fillStyle = box.active ? '#f59e0b' : '#6b7280';
+                ctx.fillRect(box.x, box.y, box.width, box.height);
+                ctx.strokeStyle = '#b45309';
+                ctx.strokeRect(box.x, box.y, box.width, box.height);
+                if (box.active) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 16px Cairo';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('?', box.x + box.width/2, box.y + box.height/2);
+                }
+            });
+
+            // Draw Collectible Coins
+            collectibleCoins.forEach(coin => {
+                if (!coin.collected) {
+                    let pulse = Math.sin(Date.now() / 150) * 3;
+                    ctx.fillStyle = '#fbbf24';
+                    ctx.beginPath();
+                    ctx.arc(coin.x, coin.y, coin.size + pulse/2, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#d97706';
+                    ctx.beginPath();
+                    ctx.arc(coin.x, coin.y, coin.size - 4, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            });
+
+            // Draw Flagpole
+            ctx.fillStyle = '#9ca3af';
+            ctx.fillRect(flagpole.x, flagpole.y, flagpole.width, flagpole.height);
+            ctx.fillStyle = '#dc2626';
+            ctx.beginPath();
+            ctx.arc(flagpole.x + flagpole.width/2, flagpole.y, 14, 0, Math.PI * 2);
+            ctx.fill();
+            // Flag banner
+            ctx.fillStyle = '#3b82f6';
+            ctx.beginPath();
+            ctx.moveTo(flagpole.x + flagpole.width, flagpole.y + 10);
+            ctx.lineTo(flagpole.x + flagpole.width + 50, flagpole.y + 30);
+            ctx.lineTo(flagpole.x + flagpole.width, flagpole.y + 50);
+            ctx.fill();
+
+            // Draw Enemies (Goombas)
+            enemies.forEach(enemy => {
+                if (!enemy.alive) return;
+                ctx.fillStyle = '#7c2d12';
+                ctx.beginPath();
+                ctx.arc(enemy.x + enemy.width/2, enemy.y + enemy.height - 12, 16, Math.PI, 0, false);
+                ctx.fill();
+                ctx.fillRect(enemy.x + 2, enemy.y + 14, enemy.width - 4, 20);
+                // Eyes
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(enemy.x + 6, enemy.y + 16, 5, 6);
+                ctx.fillRect(enemy.x + 20, enemy.y + 16, 5, 6);
+            });
+
+            // Draw Mario (Player Character)
+            // Body (Red overalls & shirt)
+            ctx.fillStyle = '#dc2626';
+            ctx.fillRect(player.x + 4, player.y + 16, player.width - 8, 20);
+            ctx.fillStyle = '#1d4ed8'; // Overalls straps
+            ctx.fillRect(player.x + 8, player.y + 24, 6, 12);
+            ctx.fillRect(player.x + 18, player.y + 24, 6, 12);
+            // Head & Cap
+            ctx.fillStyle = '#fde047'; // Face skin
+            ctx.fillRect(player.x + 6, player.y + 6, player.width - 12, 12);
+            ctx.fillStyle = '#dc2626'; // Red Cap
+            ctx.fillRect(player.x + 4, player.y + 2, player.width - 8, 8);
+            let brimDir = player.facingRight ? player.x + player.width - 8 : player.x;
+            ctx.fillRect(brimDir, player.y + 6, 10, 4);
+
+            // Draw Particles
+            particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            ctx.restore();
+        }
+
+        function updateHUD() {
+            document.getElementById('lives-display').innerText = lives;
+            document.getElementById('coins-display').innerText = coins;
+            document.getElementById('score-display').innerText = score;
+            document.getElementById('level-display').innerText = level;
+        }
+
+        function showOverlay(title, desc, btnText) {
+            document.getElementById('overlay-title').innerText = title;
+            document.getElementById('overlay-desc').innerText = desc;
+            document.getElementById('start-btn').innerText = btnText;
+            document.getElementById('overlay').classList.remove('hidden');
+        }
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+            if (gameState === 'GAMEOVER' || gameState === 'VICTORY') {
+                if (gameState === 'VICTORY') {
+                    level++;
+                } else {
+                    score = 0;
+                    coins = 0;
+                    lives = 3;
+                    level = 1;
+                }
+            }
+            document.getElementById('overlay').classList.add('hidden');
+            gameState = 'PLAYING';
+            initLevel();
+        });
+
+        // Main game loop
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Initialize display and start loop
+        initLevel();
+        gameLoop();
+    </script>
+</body>
+</html>
